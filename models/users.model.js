@@ -1,29 +1,44 @@
-
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
-    name: {
-      type: String,
-      required: true,
+  name: {
+    type: String,
+    required: true,
+  },
+  email: {
+    type: String,
+    required: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  workingHours: {
+    sunday: {
+      type: String
     },
-    email: {
-      type: String,
-      required: true,
+    monday: {
+      type: String
     },
-    password: {
-      type: String,
-      required: true,
+    tuesday: {
+      type: String
     },
-    workingHours: {
-        type: Number,
-        default : 9,
-        required: true,
-      },
-    createdAt: {
-      type: Date,
-      default: Date.now,
+    wednesday: {
+      type: String
     },
-  });
+    thursday: {
+      type: String
+    },
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  isActive: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const Users = mongoose.model("Users", userSchema);
 
