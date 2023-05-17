@@ -17,6 +17,6 @@ const durationSchema = new mongoose.Schema({
       } 
 });
 
-const Durations = new mongoose.model("durations", durationSchema);
+const Durations = mongoose.model("durations", durationSchema);
 
 module.exports = Durations;

@@ -34,6 +34,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  employeeType:{
+    type: String,
+    required: true
+  },
   isActive: {
     type: Boolean,
     default: false

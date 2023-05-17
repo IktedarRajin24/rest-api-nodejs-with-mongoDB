@@ -1,6 +1,7 @@
 const TimeTracking = require("../models/timeTracking.model");
 const Users = require("../models/users.model");
 const Durations = require("../models/duration.model");
+const Holidays = require("../models/holidays.model");
 
 exports.userLogin = async (req, res) => {
   try {
@@ -10,9 +11,8 @@ exports.userLogin = async (req, res) => {
       email: email,
       password: password,
     }).select({
-      name: 1,
       email: 1,
-      _id: 1,
+      name: 1,
       workingHours: 1,
     });
     if (user) {
@@ -20,57 +20,60 @@ exports.userLogin = async (req, res) => {
       const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
       const day = dayName.toLocaleLowerCase();
       const hour = date.getHours() % 12 || 12;
+      let minutes = date.getMinutes();
+      if (minutes < 10) {
+        minutes = "0" + minutes;
+      }
+      const currentTime =
+        Math.round(parseFloat(hour + "." + minutes) * 1e2) / 1e2;
       const getWorkingHour = user.workingHours[day];
-      const starting = parseInt(getWorkingHour.slice(0, 1));
-      const ending = parseInt(getWorkingHour.slice(5, 6));
+      const starting = parseFloat(getWorkingHour.slice(0, 1));
+      const startingTime = starting - 0.4;
+      const ending = parseFloat(getWorkingHour.slice(5, 6));
       const getDate = date.getDate();
       const getMonth = date.getMonth() + 1;
       const getYear = date.getFullYear();
-      const currentDate = getDate + "/" + getMonth + "/" + getYear;
-      console.log(currentDate);
+      const currentDate = getDate + "_" + getMonth + "_" + getYear;
 
-      if (user.workingHours.hasOwnProperty(day)) {
-        if (starting == hour) {
-          console.log(user.workingHours[day]);
-          console.log(starting);
-          console.log(ending);
-          console.log(hour);
-          const timing = await TimeTracking.findOne({ userID: user._id });
-          // console.log(timing);
-
-          if (timing) {
-            if (timing.date == currentDate || timing.day == dayName) {
-              res.status(400).send({
-                message: "User already logged in.",
-              });
-            }
-          } else {
-            console.log("inside else");
-            const newTiming = new TimeTracking({
-              userID: user._id,
-              inTime: hour,
-              date: currentDate,
-              day: dayName,
-            });
-            const timingData = await newTiming.save();
-            //console.log(timingData);
-            res.status(200).send({
-              message: "User found",
-              user,
-              timingData,
-            });
-          }
+      const timing = await TimeTracking.findOne({ userID: user._id });
+      const holiday = await Holidays.findOne({ date: currentDate });
+      //console.log(timing);
+      if (timing) {
+        if (timing.date == currentDate || timing.day == dayName) {
+          res.status(400).send({
+            message: "User already logged in.",
+          });
+        }
+      } else if (user.workingHours.hasOwnProperty(day) && !holiday) {
+        //console.log(starting - 0.3);
+        if (
+          (currentTime >= startingTime - 0.3 &&
+            currentTime <= starting + 0.3) ||
+          currentTime == starting
+        ) {
+          // console.log("inside else");
+          const newTiming = new TimeTracking({
+            userID: user._id,
+            inTime: currentTime,
+            date: currentDate,
+            day: dayName,
+          });
+          const timingData = await newTiming.save();
+          //console.log(timingData);
+          res.status(200).send({
+            message: "User found",
+            user,
+            timingData,
+          });
         } else {
-          res.status(500).send({ message: "Not your allocated working hour" });
+          res.status(400).send({ message: "Not your allocated working hour" });
         }
       } else {
         res.status(500).send({ message: "Not a working day" });
       }
-    } else {
-      res.status(500).send({ message: "Invalid user" });
     }
   } catch (error) {
-    res.status(500).send(error).json();
+    res.status(500).send(error);
   }
 };
 
@@ -91,8 +94,7 @@ exports.userSignup = async (req, res) => {
       "December",
     ];
     const date = new Date();
-    const monthName = date.getMonth();
-    
+    const month = date.getMonth();
     const name = req.body.name;
     const email = req.body.email;
     const password = req.body.password;
@@ -103,46 +105,38 @@ exports.userSignup = async (req, res) => {
       wednesday: req.body.wednesday,
       thursday: req.body.thursday,
     };
+    const employeeType = req.body.employeeType;
     const endingMonth = req.body.ending;
-    const newUser = new Users({
-      name,
-      email,
-      password,
-      workingHours,
-    });
-    const userData = await newUser.save();
-    const userID = userData._id;
-    const newUserDuration = new Durations({
-      userID,
-      ending: endingMonth,
-    });
-    const userDuration = await newUserDuration.save();
-
-    // console.log(userDuration.starting)
-    // console.log(userDuration.ending)
-    // console.log(monthNames.indexOf(userDuration.starting));
-    if(monthNames.indexOf(userDuration.ending) >= monthName && monthNames.indexOf(userDuration.starting)<= monthName){
-      console.log(monthNames.indexOf(userDuration.ending))
-      console.log(monthName);
-      console.log(monthNames.indexOf(userDuration.starting))
-
-      const user = await Users.findByIdAndUpdate(
-        { _id: user._id },
-        {
-          $set: {
-            isActive: true
-          },
-        },
-        { new: true }
-        );
+    //const ending = endingMonth.charAt(0).toUpperCase();
+    if (monthNames.indexOf(endingMonth) >= month) {
+      const status = true;
+      const newUser = new Users({
+        name,
+        email,
+        password,
+        workingHours,
+        isActive: status,
+        employeeType,
+      });
+      const userData = await newUser.save();
+      const userID = userData._id;
+      const newUserDuration = new Durations({
+        userID: userID,
+        ending: endingMonth,
+      });
+      const userDuration = await newUserDuration.save();
+      if (userData && userDuration) {
+        res.status(200).send({
+          message: "User created",
+          userData,
+          userDuration,
+        });
+      } else {
+        res.status(400).send({
+          message: "User can not be created",
+        });
+      }
     }
-    res.status(200).send({
-      message: "User created",
-      userData,
-      userDuration,
-    });
-
-    
   } catch (error) {
     res.status(500).send(error);
   }
@@ -257,15 +251,23 @@ exports.logoutUser = async (req, res) => {
       const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
       const day = dayName.toLocaleLowerCase();
       const hour = date.getHours() % 12 || 12;
+      let minutes = date.getMinutes();
+      if (minutes < 10) {
+        minutes = "0" + minutes;
+      }
       const getWorkingHour = user.workingHours[day];
-      const starting = timing.inTime;
-      const ending = parseInt(getWorkingHour.slice(5, getWorkingHour.length));
-      const outTime = hour;
-
+      const starting = parseFloat(timing.inTime);
+      const ending = parseFloat(getWorkingHour.slice(5, getWorkingHour.length));
+      const endTime = ending - 0.4;
+      const outTime = Math.round(parseFloat(hour + "." + minutes) * 1e2) / 1e2;
+      console.log(ending);
       let status;
-      if (outTime >= ending) {
+      if (
+        (outTime >= endTime - 0.3 && outTime <= endTime + 0.3) ||
+        outTime == ending
+      ) {
         status = "Full Day";
-        const totalTime = outTime - starting;
+        const totalTime = (outTime - starting).toFixed(2);
         const timingData = await TimeTracking.findByIdAndUpdate(
           { _id: timing._id },
           {
@@ -289,5 +291,71 @@ exports.logoutUser = async (req, res) => {
     }
   } catch (error) {
     res.status(404).send(error);
+  }
+};
+
+exports.updateUserAttendance = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const date = req.params.date;
+    const user = await TimeTracking.findOneAndUpdate(
+      { userID: id, date: date },
+      {
+        $set: {
+          inTime: req.body.inTime,
+          outTime: req.body.outTime,
+        },
+      },
+      {
+        new: true,
+      }
+    );
+    if (user) {
+      if (!user.date) {
+        res.status(400).send({
+          message: "User was not present on that day.",
+        });
+      } else {
+        res.status(200).send({
+          message: "User attendance updated successfully",
+          user,
+        });
+      }
+    } else {
+      res.status(400).send({
+        message: "User not found.",
+      });
+    }
+  } catch (error) {
+    res.status(500).send(error);
+  }
+};
+
+exports.deleteUserAttendance = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const date = req.params.date;
+    const user = await TimeTracking.findOneAndDelete({
+      userID: id,
+      date: date,
+    });
+    if (user) {
+      if (!user.date) {
+        res.status(400).send({
+          message: "User was not present on that day.",
+        });
+      } else {
+        res.status(200).send({
+          message: "User attendance deleted successfully",
+          user,
+        });
+      }
+    } else {
+      res.status(404).send({
+        message: "user not found",
+      });
+    }
+  } catch (error) {
+    res.status(500).send(error);
   }
 };

@@ -12,13 +12,13 @@ const userTiming = new mongoose.Schema({
     type: String,
   },
   inTime: {
-    type: Number,
+    type: String
   },
   outTime: {
-    type: Number,
+    type: String,
   },
   totalTime: {
-    type: Number,
+    type: String,
   },
   status: {
     type: String,
