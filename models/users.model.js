@@ -13,23 +13,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  workingHours: {
-    sunday: {
-      type: String
-    },
-    monday: {
-      type: String
-    },
-    tuesday: {
-      type: String
-    },
-    wednesday: {
-      type: String
-    },
-    thursday: {
-      type: String
-    },
-  },
   createdAt: {
     type: Date,
     default: Date.now,
