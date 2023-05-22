@@ -22,7 +22,7 @@ exports.userLogin = async (req, res) => {
       const date = new Date();
       const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
       const day = dayName.toLocaleLowerCase();
-      const hour = date.getHours() % 12 || 12;
+      const hour = date.getHours();
       let minutes = date.getMinutes();
       if (minutes < 10) {
         minutes = "0" + minutes;
@@ -46,22 +46,20 @@ exports.userLogin = async (req, res) => {
           });
         }
       } else if (weekdays.includes(day) && !holiday) {
-        //console.log(starting - 0.3);
-
-        //console.log(timingData);
-         console.log(day);
+        
         if (employeeType == "Part-time") {
           const partTimerSchedule = await PartTimers.findOne({
             userID: user._id,
           });
           const getWorkingHour = partTimerSchedule.workingHours[day];
-          const starting = parseFloat(getWorkingHour.slice(0, 1));
+          
+          const starting = parseFloat(getWorkingHour.slice(0, 2));
           const startingTime = starting - 0.4;
-          const ending = parseFloat(getWorkingHour.slice(5, 6));
+          const ending = parseFloat(getWorkingHour.slice(getWorkingHour.length-2, getWorkingHour.length));
+          console.log(currentTime);
           if (
             (currentTime >= startingTime - 0.3 &&
-              currentTime <= starting + 0.3) ||
-            currentTime == starting
+              currentTime <= starting + 0.3) 
           ) {
             // console.log("inside else");
             const newTiming = new TimeTracking({
@@ -83,7 +81,8 @@ exports.userLogin = async (req, res) => {
               .send({ message: "Not your allocated working hour" });
           }
         } else if (employeeType == "Full-time") {
-          if (currentTime >= 4 && currentTime <= 6) {
+console.log(currentTime >= 16)
+          if (currentTime >= 16 || currentTime <= 6) {
             res.status(400).send({
               message: "You can not login now.",
             });
@@ -158,6 +157,7 @@ exports.userSignup = async (req, res) => {
       const userData = await newUser.save();
       if (userData.employeeType == "Part-time") {
         const partTimer = new PartTimers({
+          userID: userData._id,
           workingHours,
         });
         partTimerData = await partTimer.save();
@@ -308,43 +308,91 @@ exports.logoutUser = async (req, res) => {
       const date = new Date();
       const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
       const day = dayName.toLocaleLowerCase();
-      const hour = date.getHours() % 12 || 12;
+      const hour = date.getHours();
       let minutes = date.getMinutes();
       if (minutes < 10) {
         minutes = "0" + minutes;
       }
-      const getWorkingHour = user.workingHours[day];
-      const starting = parseFloat(timing.inTime);
-      const ending = parseFloat(getWorkingHour.slice(5, getWorkingHour.length));
-      const endTime = ending - 0.4;
       const outTime = Math.round(parseFloat(hour + "." + minutes) * 1e2) / 1e2;
-      console.log(ending);
+      console.log(hour);
       let status;
-      if (
-        (outTime >= endTime - 0.3 && outTime <= endTime + 0.3) ||
-        outTime == ending
-      ) {
-        status = "Full Day";
-        const totalTime = (outTime - starting).toFixed(2);
-        const timingData = await TimeTracking.findByIdAndUpdate(
-          { _id: timing._id },
-          {
-            $set: {
-              outTime,
-              totalTime,
-              status,
+      if (user.employeeType == "Full-time") {
+        const fullTimerSchedule = await FullTimers.findOne({
+          userID: user._id
+        });
+        const totalHours = fullTimerSchedule.totalWorkingHours;
+        const inTime = timing.inTime;
+        const totalTime = (outTime - inTime).toFixed(2);
+        if(inTime >=12 || totalTime<= 6){
+          status = "Half Day";
+          const timingData = await TimeTracking.findByIdAndUpdate(
+            { _id: timing._id },
+            {
+              $set: {
+                outTime,
+                totalTime,
+                status,
+              },
             },
-          },
-          { new: true }
-        );
-        res.status(200).send({
-          message: "Successfully logged out",
-          timingData,
+            { new: true }
+          );
+          res.status(200).send({
+            message: "Successfully logged out",
+            timingData,
+          });
+          
+        }else{
+          status = "Full Day";
+          const timingData = await TimeTracking.findByIdAndUpdate(
+            { _id: timing._id },
+            {
+              $set: {
+                outTime,
+                totalTime,
+                status,
+              },
+            },
+            { new: true }
+          );
+          res.status(200).send({
+            message: "Successfully logged out",
+            timingData,
+          });
+        }
+      } else if (user.employeeType == "Part-time") {
+        const partTimerSchedule = await PartTimers.findOne({
+          userID: user._id,
         });
-      } else {
-        res.status(500).send({
-          message: "You can not log out!!",
-        });
+        const getWorkingHour = partTimerSchedule.workingHours[day];
+        const starting = parseFloat(getWorkingHour.slice(0, 2));
+        const startingTime = starting - 0.4;
+        const ending = parseFloat(getWorkingHour.slice(getWorkingHour.length-2, getWorkingHour.length)) - 0.4;
+        const inTime = timing.inTime;
+        if (
+          outTime >= ending - 0.3
+        ) {
+          status = "Full Day";
+          const totalTime = (outTime - inTime).toFixed(2);
+          const timingData = await TimeTracking.findByIdAndUpdate(
+            { _id: timing._id },
+            {
+              $set: {
+                outTime,
+                totalTime,
+                status,
+              },
+            },
+            { new: true }
+          );
+          res.status(200).send({
+            message: "Successfully logged out",
+            timingData,
+          });
+        } else {
+          res.status(500).send({
+            message: "You can not log out!!",
+          });
+        }
       }
     }
   } catch (error) {
@@ -369,16 +417,10 @@ exports.updateUserAttendance = async (req, res) => {
       }
     );
     if (user) {
-      if (!user.date) {
-        res.status(400).send({
-          message: "User was not present on that day.",
-        });
-      } else {
-        res.status(200).send({
-          message: "User attendance updated successfully",
-          user,
-        });
-      }
+      res.status(200).send({
+        message: "User attendance updated successfully",
+        user,
+      });
     } else {
       res.status(400).send({
         message: "User not found.",
